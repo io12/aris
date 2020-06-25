@@ -962,7 +962,10 @@ impl App {
         let local_storage = StorageService::new(Area::Local)
             .expect("failed getting localstorage");
         let yew::format::Json(tabs) = local_storage.restore("tabs");
-        let tabs: Vec<String> = tabs.expect("failed restoring tab list");
+        let tabs: Vec<String> = match tabs {
+            Ok(tabs) => tabs,
+            Err(_) => return,
+        };
         for tab_name in tabs {
             let tab_name_ = tab_name.clone();
             let oncreate = self.link.callback(move |link| {
