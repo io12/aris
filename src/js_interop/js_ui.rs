@@ -998,20 +998,19 @@ impl Component for App {
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let mut ret = Self {
+        Self {
             link,
             tabcontainer_link: None,
             menuwidget_link: None,
             proofs: HashMap::new(),
-        };
-        ret.restore_local_storage();
-        ret
+        }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             AppMsg::TabbedContainerInit(tabcontainer_link) => {
                 self.tabcontainer_link = Some(tabcontainer_link);
+                self.restore_local_storage();
                 false
             },
             AppMsg::MenuWidgetInit(menuwidget_link) => {
