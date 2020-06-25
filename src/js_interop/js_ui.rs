@@ -23,6 +23,8 @@ mod box_chars {
     pub(super) const HORIZ: char = '─';
 }
 
+const FIRST_PROOF_INDEX: usize = 1;
+
 fn proof_to_xml<W: Write>(proof: &P, output: W) {
     use proofs::xml_interop;
     let metadata = xml_interop::ProofMetaData {
@@ -32,6 +34,10 @@ fn proof_to_xml<W: Write>(proof: &P, output: W) {
     };
     xml_interop::xml_from_proof_and_metadata_with_hash(proof, &metadata, output)
         .expect("xml_from_proof_and_metadata failed");
+}
+
+fn untitled_proof_name(n: usize) -> String {
+    format!("Untitled proof {}", n)
 }
 
 pub struct ExprAstWidget {
@@ -848,13 +854,19 @@ impl Component for MenuWidget {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         props.oncreate.emit(link.clone());
         let file_open_helper = FileOpenHelper::new(props.parent.clone());
-        Self { link, props, node_ref: NodeRef::default(), next_tab_idx: 1, file_open_helper, }
+        Self {
+            link,
+            props,
+            node_ref: NodeRef::default(),
+            next_tab_idx: FIRST_PROOF_INDEX,
+            file_open_helper,
+        }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             MenuWidgetMsg::FileNew => {
-                let fname = format!("Untitled proof {}", self.next_tab_idx);
+                let fname = untitled_proof_name(self.next_tab_idx);
                 let fname_ = fname.clone();
                 let oncreate = self.props.parent.callback(move |link| AppMsg::RegisterProofName { name: fname_.clone(), link });
                 let onupdate = self.props.parent.callback(move |_| AppMsg::SaveStorage);
@@ -966,18 +978,22 @@ pub enum AppMsg {
 }
 
 impl App {
-    fn restore_local_storage(&mut self) {
+    fn restore_local_storage(&self) -> bool {
         use yew::services::storage::{Area, StorageService};
         let local_storage = StorageService::new(Area::Local)
             .expect("failed getting localstorage");
         let yew::format::Json(tabs) = local_storage.restore("tabs");
         let tabs: Vec<String> = match tabs {
             Ok(tabs) => tabs,
-            Err(_) => return,
+            Err(_) => return true,
         };
+        let mut ret = true;
         for tab_name in tabs {
             if tab_name == resolution_example::FILENAME {
                 continue
+            }
+            if tab_name == untitled_proof_name(FIRST_PROOF_INDEX) {
+                ret = false;
             }
             let tab_name_ = tab_name.clone();
             let oncreate = self.link.callback(move |link| {
@@ -997,6 +1013,18 @@ impl App {
                  onupdate=onupdate />
             };
             self.link.send_message(AppMsg::CreateTab { name: tab_name, content });
+        }
+        ret
+    }
+
+    fn after_init_widgets(&self) {
+        if let (Some(_), Some(menu_link)) = (&self.tabcontainer_link, &self.menuwidget_link) {
+            let make_blank_proof = self.restore_local_storage();
+
+            // Create the first blank proof tab if non-existent
+            if make_blank_proof {
+                menu_link.send_message(MenuWidgetMsg::FileNew);
+            }
         }
     }
 }
@@ -1018,13 +1046,12 @@ impl Component for App {
         match msg {
             AppMsg::TabbedContainerInit(tabcontainer_link) => {
                 self.tabcontainer_link = Some(tabcontainer_link);
-                self.restore_local_storage();
+                self.after_init_widgets();
                 false
             },
             AppMsg::MenuWidgetInit(menuwidget_link) => {
-                // create the first blank proof tab
-                menuwidget_link.send_message(MenuWidgetMsg::FileNew);
                 self.menuwidget_link = Some(menuwidget_link);
+                self.after_init_widgets();
                 false
             },
             AppMsg::CreateTab { name, content } => {
