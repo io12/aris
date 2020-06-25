@@ -956,17 +956,49 @@ pub enum AppMsg {
     SaveStorage,
 }
 
+impl App {
+    fn restore_local_storage(&mut self) {
+        use yew::services::storage::{Area, StorageService};
+        let local_storage = StorageService::new(Area::Local)
+            .expect("failed getting localstorage");
+        let yew::format::Json(tabs) = local_storage.restore("tabs");
+        let tabs: Vec<String> = tabs.expect("failed restoring tab list");
+        for tab_name in tabs {
+            let tab_name_ = tab_name.clone();
+            let oncreate = self.link.callback(move |link| {
+                AppMsg::RegisterProofName { name: tab_name_.clone(), link }
+            });
+            let onupdate = self.link.callback(move |_| AppMsg::SaveStorage);
+            let proof = local_storage
+                .restore::<Result<String, _>>(&tab_name)
+                .expect("failed restoring tab data");
+            let proof = base64::decode(proof)
+                .expect("failed restoring tab base64");
+            let content = html! {
+                <ProofWidget
+                 verbose=true
+                 data=Some(proof)
+                 oncreate=oncreate
+                 onupdate=onupdate />
+            };
+            self.link.send_message(AppMsg::CreateTab { name: tab_name, content });
+        }
+    }
+}
+
 impl Component for App {
     type Message = AppMsg;
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
-        Self {
+        let mut ret = Self {
             link,
             tabcontainer_link: None,
             menuwidget_link: None,
             proofs: HashMap::new(),
-        }
+        };
+        ret.restore_local_storage();
+        ret
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -1003,6 +1035,8 @@ impl Component for App {
                 false
             }
             AppMsg::SaveStorage => {
+                use yew::services::storage::{Area, StorageService};
+
                 for (name, link) in &self.proofs {
                     let name = name.clone();
                     let callback = move |proof: &P| {
@@ -1010,7 +1044,6 @@ impl Component for App {
                         proof_to_xml(proof, &mut xml);
                         let b64 = base64::encode(xml);
 
-                        use yew::services::storage::{Area, StorageService};
                         StorageService::new(Area::Local)
                             .expect("failed getting localstorage")
                             .store(&name, Ok(b64));
@@ -1018,6 +1051,14 @@ impl Component for App {
                     let callback = ProofWidgetMsg::CallOnProof(Box::new(callback));
                     link.send_message(callback)
                 }
+
+                let tabs = self.proofs.keys().cloned().collect::<Vec<String>>();
+                let tabs = yew::format::Json(&tabs);
+
+                StorageService::new(Area::Local)
+                    .expect("failed getting localstorage")
+                    .store("tabs", tabs);
+
                 false
             }
         }
