@@ -5,6 +5,7 @@ use proofs::{Proof, Justification, pooledproof::PooledProof, PJRef, pj_to_pjs, j
 use rules::{Rule, RuleM, RuleT, RuleClassification};
 use std::collections::{BTreeSet,HashMap};
 use std::{fmt, mem};
+use std::io::Write;
 use wasm_bindgen::{closure::Closure, JsValue, JsCast};
 use yew::prelude::*;
 use strum::IntoEnumIterator;
@@ -15,6 +16,17 @@ mod box_chars {
     pub(super) const DOWN_RIGHT: char = '╭';
     pub(super) const UP_RIGHT: char = '╰';
     pub(super) const HORIZ: char = '─';
+}
+
+fn proof_to_xml<W: Write>(proof: &P, output: W) {
+    use proofs::xml_interop;
+    let metadata = xml_interop::ProofMetaData {
+        author: Some("ARIS-YEW-UI".to_string()),
+        hash: None,
+        goals: vec![],
+    };
+    xml_interop::xml_from_proof_and_metadata_with_hash(proof, &metadata, output)
+        .expect("xml_from_proof_and_metadata failed");
 }
 
 pub struct ExprAstWidget {
@@ -134,6 +146,7 @@ pub struct ProofWidgetProps {
     verbose: bool,
     data: Option<Vec<u8>>,
     oncreate: Callback<ComponentLink<ProofWidget>>,
+    onupdate: Callback<ComponentLink<ProofWidget>>,
 }
 
 impl ProofWidget {
@@ -532,6 +545,7 @@ impl Component for ProofWidget {
         tmp
     }
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        self.props.onupdate.emit(self.link.clone());
         let mut ret = false;
         if self.props.verbose {
             self.preblob += &format!("{:?}\n", msg);
@@ -744,7 +758,15 @@ impl FileOpenHelper {
                     if let Some(contents) = contents.as_string() {
                         let fname_ = fname.clone();
                         let oncreate = parent.callback(move |link| AppMsg::RegisterProofName { name: fname_.clone(), link });
-                        parent.send_message(AppMsg::CreateTab { name: fname, content: html! { <ProofWidget verbose=true data=Some(contents.into_bytes()) oncreate=oncreate /> }});
+                        let onupdate = parent.callback(move |_| AppMsg::SaveStorage);
+                        let content = html! {
+                            <ProofWidget
+                                verbose=true
+                                data=Some(contents.into_bytes())
+                                oncreate=oncreate
+                                onupdate=onupdate />
+                        };
+                        parent.send_message(AppMsg::CreateTab { name: fname, content });
                     }
                 }
             }
@@ -826,7 +848,15 @@ impl Component for MenuWidget {
                 let fname = format!("Untitled proof {}", self.next_tab_idx);
                 let fname_ = fname.clone();
                 let oncreate = self.props.parent.callback(move |link| AppMsg::RegisterProofName { name: fname_.clone(), link });
-                self.props.parent.send_message(AppMsg::CreateTab { name: fname, content: html! { <ProofWidget verbose=true data=None oncreate=oncreate /> } });
+                let onupdate = self.props.parent.callback(move |_| AppMsg::SaveStorage);
+                let content = html! {
+                    <ProofWidget
+                        verbose=true
+                        data=None
+                        oncreate=oncreate
+                        onupdate=onupdate />
+                };
+                self.props.parent.send_message(AppMsg::CreateTab { name: fname, content });
                 self.next_tab_idx += 1;
                 false
             },
@@ -835,14 +865,8 @@ impl Component for MenuWidget {
             MenuWidgetMsg::FileSave => {
                 let node = self.node_ref.get().expect("MenuWidget::node_ref failed");
                 self.props.parent.send_message(AppMsg::GetProofFromCurrentTab(Box::new(move |name, prf| {
-                    use proofs::xml_interop;
                     let mut data = vec![];
-                    let metadata = xml_interop::ProofMetaData {
-                        author: Some("ARIS-YEW-UI".into()),
-                        hash: None,
-                        goals: vec![],
-                    };
-                    xml_interop::xml_from_proof_and_metadata_with_hash(prf, &metadata, &mut data).expect("xml_from_proof_and_metadata failed");
+                    proof_to_xml(prf, &mut data);
                     let window = web_sys::window().expect("web_sys::window failed");
                     let document = window.document().expect("window.document failed");
                     let anchor = document.create_element("a").expect("document.create_element(\"a\") failed");
@@ -927,6 +951,9 @@ pub enum AppMsg {
     CreateTab { name: String, content: Html },
     RegisterProofName { name: String, link: ComponentLink<ProofWidget> },
     GetProofFromCurrentTab(Box<dyn FnOnce(String, &P)>),
+
+    /// Save proofs to [`localStorage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage)
+    SaveStorage,
 }
 
 impl Component for App {
@@ -975,6 +1002,24 @@ impl Component for App {
                 }
                 false
             }
+            AppMsg::SaveStorage => {
+                for (name, link) in &self.proofs {
+                    let name = name.clone();
+                    let callback = move |proof: &P| {
+                        let mut xml = Vec::new();
+                        proof_to_xml(proof, &mut xml);
+                        let b64 = base64::encode(xml);
+
+                        use yew::services::storage::{Area, StorageService};
+                        StorageService::new(Area::Local)
+                            .expect("failed getting localstorage")
+                            .store(&name, Ok(b64));
+                    };
+                    let callback = ProofWidgetMsg::CallOnProof(Box::new(callback));
+                    link.send_message(callback)
+                }
+                false
+            }
         }
     }
 
@@ -983,7 +1028,11 @@ impl Component for App {
         let resolution_fname_ = resolution_fname.clone();
         let tabview = html! {
             <TabbedContainer tab_ids=vec![resolution_fname.clone(), "Parser demo".into()] oncreate=self.link.callback(|link| AppMsg::TabbedContainerInit(link))>
-                <ProofWidget verbose=true data=Some(include_bytes!("../../resolution_example.bram").to_vec()) oncreate=self.link.callback(move |link| AppMsg::RegisterProofName { name: resolution_fname_.clone(), link }) />
+                <ProofWidget
+                    verbose=true
+                    data=Some(include_bytes!("../../resolution_example.bram").to_vec())
+                    oncreate=self.link.callback(move |link| AppMsg::RegisterProofName { name: resolution_fname_.clone(), link })
+                    onupdate=self.link.callback(move |_| AppMsg::SaveStorage) />
             </TabbedContainer>
         };
         html! {
