@@ -976,6 +976,9 @@ impl App {
             Err(_) => return,
         };
         for tab_name in tabs {
+            if tab_name == resolution_example::FILENAME {
+                continue
+            }
             let tab_name_ = tab_name.clone();
             let oncreate = self.link.callback(move |link| {
                 AppMsg::RegisterProofName { name: tab_name_.clone(), link }
@@ -1049,9 +1052,6 @@ impl Component for App {
                 use yew::services::storage::{Area, StorageService};
 
                 for (name, link) in &self.proofs {
-                    if name == resolution_example::FILENAME {
-                        continue
-                    }
                     let name = name.clone();
                     let callback = move |proof: &P| {
                         let mut xml = Vec::new();
