@@ -545,7 +545,6 @@ impl Component for ProofWidget {
         tmp
     }
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        self.props.onupdate.emit(self.link.clone());
         let mut ret = false;
         if self.props.verbose {
             self.preblob += &format!("{:?}\n", msg);
@@ -555,6 +554,7 @@ impl Component for ProofWidget {
         match msg {
             ProofWidgetMsg::Nop => {},
             ProofWidgetMsg::LineChanged(r, input) => {
+                self.props.onupdate.emit(self.link.clone());
                 self.pud.ref_to_input.insert(r.clone(), input.clone());
                 if let Some(e) = crate::parser::parse(&input) {
                     match r {
@@ -566,6 +566,7 @@ impl Component for ProofWidget {
                 ret = true;
             },
             ProofWidgetMsg::LineAction(LineActionKind::Insert { what, after, relative_to }, orig_ref) => {
+                self.props.onupdate.emit(self.link.clone());
                 use expression_builders::var;
                 let to_select;
                 let insertion_point = match relative_to {
@@ -595,6 +596,7 @@ impl Component for ProofWidget {
                 ret = true;
             },
             ProofWidgetMsg::LineAction(LineActionKind::Delete { what }, proofref) => {
+                self.props.onupdate.emit(self.link.clone());
                 let parent = self.prf.parent_of_line(&pj_to_pjs::<P>(proofref.clone()));
                 match what {
                     LAKItem::Line => {
@@ -621,6 +623,7 @@ impl Component for ProofWidget {
                 ret = true;
             },
             ProofWidgetMsg::LineAction(LineActionKind::SetRule { rule }, proofref) => {
+                self.props.onupdate.emit(self.link.clone());
                 if let Inr(Inl(jr)) = &proofref {
                     self.prf.with_mut_step(&jr, |j| { j.1 = rule });
                 }
@@ -632,6 +635,7 @@ impl Component for ProofWidget {
                 ret = true;
             },
             ProofWidgetMsg::LineAction(LineActionKind::SetDependency { to, dep }, proofref) => {
+                self.props.onupdate.emit(self.link.clone());
                 if let Inr(Inl(jr)) = &proofref {
                     self.prf.with_mut_step(&jr, |j| {
                         fn toggle_dep_or_sdep<T: Ord>(dep: T, deps: &mut Vec<T>, to: bool) {
