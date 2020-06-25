@@ -10,6 +10,11 @@ use wasm_bindgen::{closure::Closure, JsValue, JsCast};
 use yew::prelude::*;
 use strum::IntoEnumIterator;
 
+mod resolution_example {
+    pub(super) const FILENAME: &str = "resolution_example.bram";
+    pub(super) const XML: &[u8] = include_bytes!("../../resolution_example.bram");
+}
+
 mod box_chars {
     pub(super) const VERT: char = '│';
     pub(super) const VERT_RIGHT: char = '├';
@@ -1044,6 +1049,9 @@ impl Component for App {
                 use yew::services::storage::{Area, StorageService};
 
                 for (name, link) in &self.proofs {
+                    if name == resolution_example::FILENAME {
+                        continue
+                    }
                     let name = name.clone();
                     let callback = move |proof: &P| {
                         let mut xml = Vec::new();
@@ -1071,15 +1079,22 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
-        let resolution_fname: String = "resolution_example.bram".into();
-        let resolution_fname_ = resolution_fname.clone();
         let tabview = html! {
-            <TabbedContainer tab_ids=vec![resolution_fname.clone(), "Parser demo".into()] oncreate=self.link.callback(|link| AppMsg::TabbedContainerInit(link))>
+            <TabbedContainer
+                tab_ids=vec![resolution_example::FILENAME.to_string(), "Parser demo".to_string()]
+                oncreate=self.link.callback(|link| AppMsg::TabbedContainerInit(link))>
+
                 <ProofWidget
                     verbose=true
-                    data=Some(include_bytes!("../../resolution_example.bram").to_vec())
-                    oncreate=self.link.callback(move |link| AppMsg::RegisterProofName { name: resolution_fname_.clone(), link })
+                    data=Some(resolution_example::XML.to_vec())
+                    oncreate=self.link.callback(move |link| {
+                        AppMsg::RegisterProofName {
+                            name: resolution_example::FILENAME.to_string(),
+                            link
+                        }
+                    })
                     onupdate=self.link.callback(move |_| AppMsg::SaveStorage) />
+
             </TabbedContainer>
         };
         html! {
