@@ -1,7 +1,8 @@
 use expression::Expr;
 use frunk::Coproduct;
 use gloo::timers::callback::Timeout;
-use proofs::{Proof, Justification, pooledproof::PooledProof, PJRef, pj_to_pjs, js_to_pjs};
+use proofs::{Proof, Justification, pooledproof::PooledProof, PJRef, pj_to_pjs};
+use proofs::proof_ui_data::*;
 use rules::{Rule, RuleM, RuleT, RuleClassification};
 use std::collections::{BTreeSet,HashMap};
 use std::{fmt, mem};
@@ -93,22 +94,6 @@ impl Component for ExprAstWidget {
 
 // yew doesn't seem to allow Components to be generic over <P: Proof>, so fix a proof type P at the module level
 pub type P = PooledProof<Hlist![Expr]>;
-
-pub struct ProofUiData<P: Proof> {
-    ref_to_line_depth: HashMap<PJRef<P>, (usize, usize)>,
-    ref_to_input: HashMap<PJRef<P>, String>,
-}
-
-impl<P: Proof> ProofUiData<P> {
-    pub fn from_proof(prf: &P) -> ProofUiData<P> {
-        let mut ref_to_line_depth = HashMap::new();
-        calculate_lineinfo::<P>(&mut ref_to_line_depth, prf.top_level_proof(), &mut 1, &mut 0);
-        ProofUiData {
-            ref_to_line_depth,
-            ref_to_input: initialize_inputs(prf),
-        }
-    }
-}
 
 pub struct ProofWidget {
     link: ComponentLink<Self>,
@@ -469,47 +454,6 @@ impl ProofWidget {
             yew::virtual_dom::VNode::from(output)
         }
     }
-}
-
-pub fn calculate_lineinfo<P: Proof>(output: &mut HashMap<PJRef<P>, (usize, usize)>, prf: &<P as Proof>::Subproof, line: &mut usize, depth: &mut usize) {
-    for prem in prf.premises() {
-        output.insert(Coproduct::inject(prem.clone()), (*line, *depth));
-        *line += 1;
-    }
-    for lineref in prf.lines() {
-        use frunk::Coproduct::{Inl, Inr};
-        match lineref {
-            Inl(r) => { output.insert(Coproduct::inject(r), (*line, *depth)); *line += 1; },
-            Inr(Inl(sr)) => { *depth += 1; calculate_lineinfo::<P>(output, &prf.lookup_subproof(&sr).unwrap(), line, depth); *depth -= 1; },
-            Inr(Inr(void)) => { match void {} },
-        }
-    }
-}
-
-pub fn initialize_inputs<P: Proof>(prf: &P) -> HashMap<PJRef<P>, String> {
-    fn aux<P: Proof>(p: &<P as Proof>::Subproof, out: &mut HashMap<PJRef<P>, String>) {
-        use frunk::Coproduct::{Inl, Inr};
-        for line in p.premises().into_iter().map(Coproduct::inject).chain(p.lines().into_iter().map(js_to_pjs::<P>)) {
-            match line {
-                Inl(pr) => {
-                    if let Some(e) = p.lookup_expr(&Coproduct::inject(pr.clone())) {
-                        out.insert(Coproduct::inject(pr.clone()), format!("{}", e));
-                    }
-                }
-                Inr(Inl(jr)) => {
-                    if let Some(e) = p.lookup_expr(&Coproduct::inject(jr.clone())) {
-                        out.insert(Coproduct::inject(jr.clone()), format!("{}", e));
-                    }
-                },
-                Inr(Inr(Inl(sr))) => aux::<P>(&p.lookup_subproof(&sr).unwrap(), out),
-                Inr(Inr(Inr(void))) => match void {},
-            }
-        }
-    }
-
-    let mut out = HashMap::new();
-    aux::<P>(prf.top_level_proof(), &mut out);
-    out
 }
 
 fn may_remove_line<P: Proof>(prf: &P, proofref: &PJRef<P>) -> bool {
