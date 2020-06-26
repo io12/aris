@@ -19,22 +19,23 @@ impl<P: Proof> ProofUiData<P> {
         }
     }
 
-    pub fn from_proof(prf: &P) -> Self {
-        let mut ref_to_line_depth = HashMap::new();
-        calculate_lineinfo::<P>(
-            &mut ref_to_line_depth,
-            prf.top_level_proof(),
-            &mut 1,
-            &mut 0,
-        );
+    pub fn from_proof(proof: &P) -> Self {
         ProofUiData {
-            ref_to_line_depth,
-            ref_to_input: initialize_inputs(prf),
+            ref_to_line_depth: calculate_lineinfo::<P>(proof.top_level_proof()),
+            ref_to_input: initialize_inputs(proof),
         }
     }
 }
 
 pub fn calculate_lineinfo<P: Proof>(
+    proof: &<P as Proof>::Subproof,
+) -> HashMap<PJRef<P>, (usize, usize)> {
+    let mut ret = HashMap::new();
+    calculate_lineinfo_helper::<P>(&mut ret, proof.top_level_proof(), &mut 1, &mut 0);
+    ret
+}
+
+fn calculate_lineinfo_helper<P: Proof>(
     output: &mut HashMap<PJRef<P>, (usize, usize)>,
     prf: &<P as Proof>::Subproof,
     line: &mut usize,
@@ -53,7 +54,12 @@ pub fn calculate_lineinfo<P: Proof>(
             }
             Inr(Inl(sr)) => {
                 *depth += 1;
-                calculate_lineinfo::<P>(output, &prf.lookup_subproof(&sr).unwrap(), line, depth);
+                calculate_lineinfo_helper::<P>(
+                    output,
+                    &prf.lookup_subproof(&sr).unwrap(),
+                    line,
+                    depth,
+                );
                 *depth -= 1;
             }
             Inr(Inr(void)) => match void {},
