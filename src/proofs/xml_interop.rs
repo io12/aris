@@ -198,6 +198,8 @@ pub fn proof_from_xml<P: Proof, R: Read>(
             }
         }
     }
+
+    ui_data.ref_to_line_depth = proof_ui_data::calculate_lineinfo::<P>(proof.top_level_proof());
     Ok((proof, metadata, ui_data))
 }
 
