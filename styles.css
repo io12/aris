@@ -1,0 +1,48 @@
+/* Make <body> fill the entire window. The code in `index.html` to dismiss
+   Bootstrap popovers requires this. */
+html, body {
+    height: 100%;
+}
+
+.indent {
+    padding-right: 0px;
+    line-height: 1;
+    font-size: 35px;
+    user-select: none;
+
+    /* On Firefox on Windows and macOS, the default monospaced font isn't
+       monospaced for box drawing characters, so instead we need to use Consolas
+       on Windows and Menlo on macOS. */
+    font-family: Consolas, Menlo, monospace;
+}
+
+.proof-line * {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* Apply this to a bootstrap alert on a <span> tag and it will be button-sized */
+.small-alert {
+    display: inline-block;
+    padding: 0.375rem 0.75rem;
+    margin-bottom: 0;
+}
+
+/* Fixes annoyances with Bootstrap's `form-custom` on `<input type="text">` */
+.text-input-custom {
+    display: inline;
+    width: 400px;
+    color: black;
+}
+
+/* Used to make "Correct", "Error", and "Parse Error" the same size. */
+.s1 {
+    width: 106px;
+    text-align: center;
+}
+
+/* Used to make "Premise" and "Assumption" the same size. */
+.s2 {
+    width: 112px;
+    text-align: center;
+}
